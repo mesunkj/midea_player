@@ -10,14 +10,16 @@ function App() {
   const [order, setOrder] = useState<string>('shuffle'); // 預設打散
   const [recursive, setRecursive] = useState<boolean>(false);
   const [transition, setTransition] = useState<string>('fade');
+  const [subDirKeyword, setSubDirKeyword] = useState<string>('');
 
-  const handleStart = (selectedDirs: string[], selectedLayout: string, selectedInterval: number, selectedOrder: string, selectedRecursive: boolean, selectedTransition: string) => {
+  const handleStart = (selectedDirs: string[], selectedLayout: string, selectedInterval: number, selectedOrder: string, selectedRecursive: boolean, selectedTransition: string, selectedSubDirKeyword: string) => {
     setDirectories(selectedDirs);
     setLayout(selectedLayout);
     setIntervalTime(selectedInterval);
     setOrder(selectedOrder);
     setRecursive(selectedRecursive);
     setTransition(selectedTransition);
+    setSubDirKeyword(selectedSubDirKeyword);
     setIsPlaying(true);
   };
 
@@ -31,6 +33,7 @@ function App() {
           order={order}
           recursive={recursive}
           transition={transition}
+          subDirKeyword={subDirKeyword}
           onExit={() => setIsPlaying(false)} 
         />
       ) : (
@@ -41,6 +44,7 @@ function App() {
           initialOrder={order}
           initialRecursive={recursive}
           initialTransition={transition}
+          initialSubDirKeyword={subDirKeyword}
           onStart={handleStart} 
         />
       )}

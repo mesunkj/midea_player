@@ -13,31 +13,42 @@ export async function selectDirectories() {
 }
 
 // 掃描目錄並過濾支援的圖片
-export function scanDirectories(dirPaths: string[], recursive: boolean = false): string[] {
+export function scanDirectories(dirPaths: string[], recursive: boolean = false, subDirKeyword: string = ''): string[] {
   const supportedExts = ['.jpg', '.jpeg', '.png', '.webp'];
   let allImages: string[] = [];
+  const keyword = subDirKeyword.trim().toLowerCase();
+  const shouldForceRecursive = keyword.length > 0;
+  const isRecursive = recursive || shouldForceRecursive;
 
-  const scan = (currentDir: string) => {
+  const scan = (currentDir: string, rootDir: string) => {
     if (!fs.existsSync(currentDir)) return;
     
     const files = fs.readdirSync(currentDir, { withFileTypes: true });
     for (const file of files) {
       const fullPath = path.join(currentDir, file.name);
       if (file.isDirectory()) {
-        if (recursive) {
-          scan(fullPath);
+        if (isRecursive) {
+          scan(fullPath, rootDir);
         }
       } else {
         const ext = path.extname(file.name).toLowerCase();
         if (supportedExts.includes(ext)) {
-          allImages.push(fullPath);
+          if (keyword) {
+            // 只看主目錄以下的相對路徑
+            const relativePath = path.relative(rootDir, currentDir);
+            if (relativePath.toLowerCase().includes(keyword)) {
+              allImages.push(fullPath);
+            }
+          } else {
+            allImages.push(fullPath);
+          }
         }
       }
     }
   };
 
   for (const dir of dirPaths) {
-    scan(dir);
+    scan(dir, dir);
   }
 
   return allImages;

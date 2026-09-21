@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, protocol } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { selectDirectories, scanDirectories, generateThumbnail } from './fileManager';
+import { addToAiQueue, getCropData } from './aiWorker';
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -39,8 +40,15 @@ app.whenReady().then(() => {
     return await selectDirectories();
   });
 
-  ipcMain.handle('files:scan', async (_event, dirPaths: string[], recursive: boolean) => {
-    return scanDirectories(dirPaths, recursive);
+  ipcMain.handle('files:scan', async (_event, dirPaths: string[], recursive: boolean, subDirKeyword: string) => {
+    const images = scanDirectories(dirPaths, recursive, subDirKeyword);
+    // 放入背景佇列讓 AI 慢慢運算
+    addToAiQueue(images);
+    return images;
+  });
+
+  ipcMain.handle('ai:get-crop-data', async (_event, imagePath: string) => {
+    return getCropData(imagePath);
   });
 
   ipcMain.handle('image:save', async (_event, imagePath: string) => {

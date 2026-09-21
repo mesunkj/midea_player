@@ -9,10 +9,11 @@ interface Props {
   order: string;
   recursive: boolean;
   transition: string;
+  subDirKeyword: string;
   onExit: () => void;
 }
 
-const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, order, recursive, transition, onExit }) => {
+const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, order, recursive, transition, subDirKeyword, onExit }) => {
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isIdle, setIsIdle] = useState(false);
@@ -39,7 +40,7 @@ const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, orde
     let isMounted = true;
     const fetchImages = async () => {
       if (window.electronAPI && (window.electronAPI as any).scanDirectories) {
-        let fetched: string[] = await (window.electronAPI as any).scanDirectories(directories, recursive);
+        let fetched: string[] = await (window.electronAPI as any).scanDirectories(directories, recursive, subDirKeyword);
         if (order === 'shuffle') {
           // 隨機打散演算法 (Fisher-Yates)
           for (let i = fetched.length - 1; i > 0; i--) {
@@ -55,7 +56,7 @@ const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, orde
     };
     fetchImages();
     return () => { isMounted = false; };
-  }, [directories, order, recursive]);
+  }, [directories, order, recursive, subDirKeyword]);
 
   if (loading) {
     return (
@@ -186,6 +187,7 @@ const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, orde
           <div key={i} style={getAsymmetricStyle(i)}>
             <GridCell 
               images={images} 
+              directories={directories}
               initialIndex={i} 
               intervalTime={intervalTime} 
               step={pageSize} 

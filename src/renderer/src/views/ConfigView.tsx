@@ -7,11 +7,12 @@ interface Props {
   initialOrder: string;
   initialRecursive: boolean;
   initialTransition: string;
-  onStart: (directories: string[], layout: string, interval: number, order: string, recursive: boolean, transition: string) => void;
+  initialSubDirKeyword: string;
+  onStart: (directories: string[], layout: string, interval: number, order: string, recursive: boolean, transition: string, subDirKeyword: string) => void;
 }
 
 const ConfigView: React.FC<Props> = ({ 
-  initialDirectories, initialLayout, initialInterval, initialOrder, initialRecursive, initialTransition, onStart 
+  initialDirectories, initialLayout, initialInterval, initialOrder, initialRecursive, initialTransition, initialSubDirKeyword, onStart 
 }) => {
   const [directories, setDirectories] = useState<string[]>(initialDirectories);
   const [layout, setLayout] = useState<string>(initialLayout);
@@ -19,6 +20,7 @@ const ConfigView: React.FC<Props> = ({
   const [order, setOrder] = useState<string>(initialOrder);
   const [recursive, setRecursive] = useState<boolean>(initialRecursive);
   const [transition, setTransition] = useState<string>(initialTransition);
+  const [subDirKeyword, setSubDirKeyword] = useState<string>(initialSubDirKeyword);
 
   const handleSelectDirectory = async () => {
     if (window.electronAPI && (window.electronAPI as any).selectDirectories) {
@@ -62,6 +64,20 @@ const ConfigView: React.FC<Props> = ({
                 ))}
               </ul>
             )}
+            
+            <div style={{ marginTop: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>篩選子目錄 (選填)：</label>
+              <input 
+                type="text" 
+                placeholder="輸入關鍵字..."
+                value={subDirKeyword}
+                onChange={e => setSubDirKeyword(e.target.value)}
+                style={{ ...selectStyle, width: '100%', boxSizing: 'border-box' }}
+              />
+              <p style={{ color: '#aaa', fontSize: '0.85rem', marginTop: '8px', marginBottom: 0 }}>
+                僅載入路徑包含此關鍵字的子資料夾照片。若輸入關鍵字，將強制啟用深度掃描。
+              </p>
+            </div>
           </div>
         </div>
 
@@ -141,7 +157,7 @@ const ConfigView: React.FC<Props> = ({
 
       <div style={{ textAlign: 'center', marginTop: '40px' }}>
         <button 
-          onClick={() => onStart(directories, layout, intervalTime, order, recursive, transition)}
+          onClick={() => onStart(directories, layout, intervalTime, order, recursive, transition, subDirKeyword)}
           disabled={directories.length === 0}
           style={{ 
             padding: '15px 40px', fontSize: '1.2rem', fontWeight: 'bold',
