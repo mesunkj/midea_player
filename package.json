@@ -7,18 +7,48 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
+    "dist:win": "vite build && electron-builder --win --x64",
     "preview": "vite preview"
   },
   "build": {
+    "appId": "com.antigravity.midea-player",
+    "productName": "Midea Player",
+    "copyright": "Copyright © 2026 Antigravity",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
       "package.json"
-    ]
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Midea Player",
+      "deleteAppDataOnUninstall": false
+    }
   },
   "dependencies": {
+    "@mediapipe/face_detection": "^0.4.1646425229",
+    "@tensorflow-models/face-detection": "^1.0.3",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@vladmandic/face-api": "^1.7.15",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "sharp": "^0.35.3"

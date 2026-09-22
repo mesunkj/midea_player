@@ -4,10 +4,8 @@ import ScanView      from './views/ScanView';
 import PlaybackView  from './views/PlaybackView';
 import AnnotationView from './views/AnnotationView';
 
-// 四個頁面狀態
 type AppView = 'config' | 'scan' | 'play' | 'annotate';
 
-// 共用播放設定型別
 interface PlaySettings {
   directories:   string[];
   layout:        string;
@@ -37,12 +35,13 @@ function App() {
     order: string, recursive: boolean, transition: string,
     subDirKeyword: string, dbRootDir: string
   ): PlaySettings => {
-    const next: PlaySettings = { directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir };
+    const next: PlaySettings = {
+      directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir,
+    };
     setSettings(next);
     return next;
   };
 
-  // ConfigView → ScanView
   const handleGoScan = (
     directories: string[], layout: string, interval: number,
     order: string, recursive: boolean, transition: string,
@@ -52,7 +51,6 @@ function App() {
     setView('scan');
   };
 
-  // ConfigView → PlaybackView（直接播放，DB 已存在）
   const handlePlayDirect = (
     directories: string[], layout: string, interval: number,
     order: string, recursive: boolean, transition: string,
@@ -62,7 +60,6 @@ function App() {
     setView('play');
   };
 
-  // ConfigView → AnnotationView（手動標註，DB 有失敗圖片時）
   const handleGoAnnotate = (
     directories: string[], layout: string, interval: number,
     order: string, recursive: boolean, transition: string,
@@ -75,7 +72,7 @@ function App() {
   const { directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir } = settings;
 
   return (
-    <div style={{ width: '100vw', height: '100vh', margin: 0, padding: 0 }}>
+    <div style={{ width: '100vw', height: '100vh', margin: 0, padding: 0, overflow: 'hidden' }}>
 
       {view === 'config' && (
         <ConfigView

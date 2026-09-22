@@ -1,51 +1,24 @@
-// 這是未來放置 TensorFlow.js AI 運算的支線任務
-// 目前先以 Mock 方式模擬背景運算佇列，驗證架構與前端 UI
-const aiResultCache: Record<string, any> = {};
-const queue: string[] = [];
-let isProcessing = false;
+/**
+ * aiWorker.ts
+ *
+ * AI 分析現已移至渲染器端 (src/renderer/src/hooks/useAiCrop.ts)，
+ * 使用 TF.js + WebGL 在瀏覽器中執行人臉偵測，速度更快且不需要 native 套件。
+ *
+ * 此檔案保留路徑正規化工具，供其他主程序功能使用。
+ * IPC handler 'ai:get-crop-data' 保留但回傳 null（渲染器不再使用）。
+ */
 
-async function processQueue() {
-  if (isProcessing || queue.length === 0) return;
-  isProcessing = true;
-
-  while (queue.length > 0) {
-    const imagePath = queue.shift();
-    if (!imagePath) continue;
-    
-    // 如果已經計算過，跳過
-    if (aiResultCache[imagePath] !== undefined) continue;
-
-    // 模擬 AI 分析耗時 (約 500ms)
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // 模擬：如果是檔名包含 _fake，我們模擬 AI 判定人物過小，給出推近裁切參數 (綠色)
-    if (imagePath.includes('_fake')) {
-      aiResultCache[imagePath] = {
-        status: 'zoomed',
-        scale: 1.5,
-        originX: '50%',
-        originY: '30%' // 推向臉部/上半身
-      };
-    } 
-    // 模擬：如果檔名包含 _error，代表辨識失敗 (紅色)
-    else if (imagePath.includes('_error')) {
-      aiResultCache[imagePath] = { status: 'unrecognized' };
-    } 
-    // 模擬：其他正常檔案，代表辨識成功但不需要裁切 (黃色)
-    else {
-      aiResultCache[imagePath] = { status: 'unchanged' };
-    }
-  }
-
-  isProcessing = false;
+/** 統一路徑格式：將 Windows 反斜線轉為正斜線 */
+export function normalizePath(p: string): string {
+  return p.replace(/\\/g, '/');
 }
 
-export function addToAiQueue(imagePaths: string[]) {
-  queue.push(...imagePaths);
-  processQueue(); // 背景慢慢消化佇列
+/** Legacy: 不再使用，渲染器端 useAiCrop hook 已取代此機制 */
+export function addToAiQueue(_imagePaths: string[]): void {
+  // no-op
 }
 
-export function getCropData(imagePath: string) {
-  // 如果還在算，或是算出來不需要裁切，都會回傳 null
-  return aiResultCache[imagePath] || null;
+/** Legacy: 不再使用 */
+export function getCropData(_imagePath: string): null {
+  return null;
 }

@@ -1,22 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import PhotoWall from '../components/PhotoWall';
 import GridCell from '../components/GridCell';
+import { useViewportDb } from '../hooks/useViewportDb';
 
 interface Props {
-  directories: string[];
-  layout: string;
-  intervalTime: number;
-  order: string;
-  recursive: boolean;
-  transition: string;
+  directories:   string[];
+  layout:        string;
+  intervalTime:  number;
+  order:         string;
+  recursive:     boolean;
+  transition:    string;
   subDirKeyword: string;
-  onExit: () => void;
+  dbRootDir:     string;
+  onExit:        () => void;
+  onAnnotate:    () => void;  // 進入手動標註
 }
 
-const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, order, recursive, transition, subDirKeyword, onExit }) => {
-  const [images, setImages] = useState<string[]>([]);
+const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, order, recursive, transition, subDirKeyword, dbRootDir, onExit, onAnnotate }) => {
+  const [images,  setImages]  = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isIdle, setIsIdle] = useState(false);
+  const [isIdle,  setIsIdle]  = useState(false);
+
+  // 載入 Viewport DB（支援自訂 DB 路徑）
+  const { getViewport, rawDb, isLoaded: dbLoaded } = useViewportDb(directories, dbRootDir);
 
   // Kiosk 模式：3 秒無動作自動隱藏
   useEffect(() => {
@@ -58,10 +64,10 @@ const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, orde
     return () => { isMounted = false; };
   }, [directories, order, recursive, subDirKeyword]);
 
-  if (loading) {
+  if (loading || !dbLoaded) {
     return (
       <div style={{ backgroundColor: '#111', color: '#fff', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <h1>讀取中...</h1>
+        <h1>{loading ? '讀取中...' : '載入 Viewport 資料庫...'}</h1>
       </div>
     );
   }
@@ -77,6 +83,8 @@ const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, orde
       }
     }
   };
+
+  const hasFailedFiles = (rawDb?.failedFiles?.length ?? 0) > 0;
 
   const toggleFullScreen = () => {
     if (!document.fullscreenElement) {
@@ -102,6 +110,7 @@ const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, orde
         }}>
            <button onClick={toggleFullScreen} style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#555', color: '#fff', border: 'none', borderRadius: '4px' }}>⛶ 全螢幕</button>
            <button onClick={handleSnapshot} style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#333', color: '#fff', border: 'none', borderRadius: '4px' }}>📷 匯出快照</button>
+           {hasFailedFiles && <button onClick={onAnnotate} style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#854d0e', color: '#fef08a', border: 'none', borderRadius: '4px' }}>🖊 手動標註</button>}
            <button onClick={onExit} style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#800', color: '#fff', border: 'none', borderRadius: '4px' }}>❌ 退出照片牆</button>
         </div>
       </div>
@@ -192,6 +201,7 @@ const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, orde
               intervalTime={intervalTime} 
               step={pageSize} 
               transition={transition}
+              getViewport={getViewport}
             />
           </div>
         ))}
@@ -207,6 +217,11 @@ const PlaybackView: React.FC<Props> = ({ directories, layout, intervalTime, orde
         <button onClick={handleSnapshot} style={{ ...ctrlBtnStyle, backgroundColor: '#333' }}>
           📷 匯出全域快照
         </button>
+        {hasFailedFiles && (
+          <button onClick={onAnnotate} style={{ ...ctrlBtnStyle, backgroundColor: '#854d0e', color: '#fef08a' }}>
+            🖊 手動標註 ({rawDb!.failedFiles.length})
+          </button>
+        )}
         <button onClick={onExit} style={{ ...ctrlBtnStyle, backgroundColor: '#800' }}>
           ❌ 退出播放
         </button>
