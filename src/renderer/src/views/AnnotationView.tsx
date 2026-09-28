@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import ViewportCanvas, { NormalizedRect } from '../components/ViewportCanvas';
+import ViewportCanvas, { NormalizedRect, AspectRatioMode } from '../components/ViewportCanvas';
 import type { ViewportDb } from '../hooks/useViewportDb';
 
 interface Props {
@@ -39,6 +39,7 @@ const AnnotationView: React.FC<Props> = ({ directories, dbRootDir, onBack, onDon
   const [loadingImg,   setLoadingImg]   = useState(false);
   const [allDone,      setAllDone]      = useState(false);
   const [lastAction,   setLastAction]   = useState<string | null>(null); // 操作回饋訊息
+  const [aspectRatio,  setAspectRatio]  = useState<AspectRatioMode>('none'); // 比例模式
 
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -82,6 +83,12 @@ const AnnotationView: React.FC<Props> = ({ directories, dbRootDir, onBack, onDon
 
   // ── 清除選取 ──────────────────────────────────────────────────────────────
   const handleClear = useCallback(() => setSelection(null), []);
+
+  // ── 切換比例模式時重置選取 ────────────────────────────────────────────────
+  const handleSetAspectRatio = useCallback((mode: AspectRatioMode) => {
+    setAspectRatio(mode);
+    setSelection(null); // 切換比例時清除舊選取，避免比例不一致
+  }, []);
 
   // ── 移除圖片並前進 ────────────────────────────────────────────────────────
   const removeAndAdvance = useCallback((removedPath: string, count = 1) => {
@@ -244,6 +251,7 @@ const AnnotationView: React.FC<Props> = ({ directories, dbRootDir, onBack, onDon
                   hasSelection={!!selection}
                   onSelect={setSelection}
                   onClear={handleClear}
+                  aspectRatio={aspectRatio}
                 />
                 {/* 座標即時顯示 */}
                 {selection && (
@@ -259,9 +267,33 @@ const AnnotationView: React.FC<Props> = ({ directories, dbRootDir, onBack, onDon
               <div style={S.placeholder}>❌ 無法載入圖片</div>
             )}
           </div>
+          {/* 比例模式切換 */}
+          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            {([
+              { mode: 'none'      as AspectRatioMode, label: '⬜ 自由',       color: '#00ff88' },
+              { mode: 'portrait'  as AspectRatioMode, label: '📱 直式 9:16', color: '#a78bfa' },
+              { mode: 'landscape' as AspectRatioMode, label: '🖥 橫式 16:9', color: '#38bdf8' },
+            ]).map(({ mode, label, color }) => (
+              <button
+                key={mode}
+                onClick={() => handleSetAspectRatio(mode)}
+                style={{
+                  padding: '6px 14px', fontSize: '0.78rem', fontWeight: 600,
+                  borderRadius: '20px', cursor: 'pointer', border: 'none',
+                  background: aspectRatio === mode ? color : 'rgba(255,255,255,0.07)',
+                  color:      aspectRatio === mode ? '#000' : '#94a3b8',
+                  transition: 'all 0.18s',
+                  boxShadow:  aspectRatio === mode ? `0 0 10px ${color}66` : 'none',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <p style={S.tip}>
-            💡 <strong>拖曳</strong>或<strong>兩點點擊</strong>選取範圍（支援任意方向）。
-            按 Check-out 可跳過 AI 直接使用原圖。
+            💡 <strong>拖曳</strong>或<strong>兩點點擊</strong>選取範圍。
+            {aspectRatio === 'portrait'  && <span style={{ color: '#a78bfa' }}> 🔒 鎖定 9:16 直式比例</span>}
+            {aspectRatio === 'landscape' && <span style={{ color: '#38bdf8' }}> 🔒 鎖定 16:9 橫式比例</span>}
           </p>
         </div>
 

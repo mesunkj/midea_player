@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import ViewportCanvas, { NormalizedRect } from '../components/ViewportCanvas';
+import ViewportCanvas, { NormalizedRect, AspectRatioMode } from '../components/ViewportCanvas';
 import { loadViewportDb, updateViewportEntry, batchCheckoutViewport } from '../platform';
 import type { ViewportDb } from '../platform';
 
@@ -34,6 +34,7 @@ const AnnotationView: React.FC<Props> = ({ directories, dbRootDir, onBack, onDon
   const [loading,     setLoading]     = useState(true);
   const [allDone,     setAllDone]     = useState(false);
   const [lastAction,  setLastAction]  = useState<string | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<AspectRatioMode>('none');
 
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -51,6 +52,11 @@ const AnnotationView: React.FC<Props> = ({ directories, dbRootDir, onBack, onDon
   }, [effectiveRoot]);
 
   const handleClear = useCallback(() => setSelection(null), []);
+
+  const handleSetAspectRatio = useCallback((mode: AspectRatioMode) => {
+    setAspectRatio(mode);
+    setSelection(null);
+  }, []);
 
   const removeAndAdvance = useCallback((removedPath: string, count = 1) => {
     setFailedFiles(prev => {
@@ -205,6 +211,7 @@ const AnnotationView: React.FC<Props> = ({ directories, dbRootDir, onBack, onDon
           hasSelection={!!selection}
           onSelect={setSelection}
           onClear={handleClear}
+          aspectRatio={aspectRatio}
         />
         {selection && (
           <div style={S.coordLabel}>
@@ -218,6 +225,30 @@ const AnnotationView: React.FC<Props> = ({ directories, dbRootDir, onBack, onDon
 
       {/* 操作按鈕區（底部） */}
       <div style={S.actionArea}>
+
+        {/* 比例模式選擇 */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', justifyContent: 'center' }}>
+          {([
+            { mode: 'none'      as AspectRatioMode, label: '⬜ 自由',       color: '#00ff88' },
+            { mode: 'portrait'  as AspectRatioMode, label: '📱 9:16',      color: '#a78bfa' },
+            { mode: 'landscape' as AspectRatioMode, label: '🖥 16:9',      color: '#38bdf8' },
+          ]).map(({ mode, label, color }) => (
+            <button
+              key={mode}
+              onClick={() => handleSetAspectRatio(mode)}
+              style={{
+                padding: '7px 16px', fontSize: '0.8rem', fontWeight: 600,
+                borderRadius: '20px', cursor: 'pointer', border: 'none',
+                background: aspectRatio === mode ? color : 'rgba(255,255,255,0.08)',
+                color:      aspectRatio === mode ? '#000' : '#94a3b8',
+                minHeight: '40px',
+                boxShadow:  aspectRatio === mode ? `0 0 10px ${color}55` : 'none',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {/* 導覽 */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>

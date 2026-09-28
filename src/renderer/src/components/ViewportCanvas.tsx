@@ -12,10 +12,13 @@
  *   - 輸出正規化座標 (x, y, w, h) 均在 [0, 1] 區間
  *   - 支援任意拖曳方向（自動取 min/max）
  *
- * 顏色：虛線框 #00ff88（符合 sp4 規格）
+ * 長寬比模式（aspectRatio prop）：
+ *   'none'      → 自由拖曳（預設，虛線框 #00ff88）
+ *   'portrait'  → 鎖定 9:16 直式（框色 #a78bfa 紫）
+ *   'landscape' → 鎖定 16:9 橫式（框色 #38bdf8 藍）
  */
 
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 
 export interface NormalizedRect {
   x: number;  // 左上角橫座標 (0–1)，相對於圖片實際顯示尺寸
@@ -30,6 +33,15 @@ interface CanvasPt {
   y: number;
 }
 
+export type AspectRatioMode = 'none' | 'portrait' | 'landscape';
+
+/** aspectRatio → w/h 數值（null = 無限制） */
+const RATIO_MAP: Record<AspectRatioMode, number | null> = {
+  none:      null,
+  portrait:  9 / 16,   // 寬/高 = 9/16
+  landscape: 16 / 9,
+};
+
 interface Props {
   /** 對應圖片 img 元素的 Ref，用於計算實際顯示尺寸 */
   imgRef:       React.RefObject<HTMLImageElement>;
@@ -39,6 +51,13 @@ interface Props {
   onSelect:     (rect: NormalizedRect) => void;
   /** 清除選取的回呼 */
   onClear:      () => void;
+  /**
+   * 長寬比限制模式（預設 'none'）：
+   *   'none'      → 自由拖曳
+   *   'portrait'  → 鎖定 9:16（直式）
+   *   'landscape' → 鎖定 16:9（橫式）
+   */
+  aspectRatio?: AspectRatioMode;
 }
 
 /** 超過此像素距離視為「拖曳」，否則視為「點擊」 */
@@ -47,7 +66,9 @@ const DRAG_THRESHOLD = 6;
 const dist = (a: CanvasPt, b: CanvasPt) =>
   Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
 
-const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onClear }) => {
+const ViewportCanvas: React.FC<Props> = ({
+  imgRef, hasSelection, onSelect, onClear, aspectRatio = 'none',
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 拖曳狀態
@@ -83,6 +104,59 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
     };
   }, [imgRef]);
 
+  // ── 工具：依長寬比限制，調整終點 b 使框符合目標比例 ─────────────────────────
+  //
+  // 演算法：
+  //   1. 以起點 a 為錨點，從 a→b 的方向符號決定往哪個象限延伸
+  //   2. 計算各方向到圖片邊界的剩餘距離（maxW, maxH）
+  //   3. 嘗試以 dx 為主或以 dy 為主推算另一邊，取第一個滿足邊界的方案
+  //   4. 若兩者都超出邊界，以邊界夾緊後的最大值為準
+  const applyAspectRatio = useCallback((a: CanvasPt, b: CanvasPt): CanvasPt => {
+    const ratio = RATIO_MAP[aspectRatio]; // w/h，null = 不限制
+    if (!ratio) return b;
+
+    const imgEl       = imgRef.current;
+    const containerEl = containerRef.current;
+    if (!imgEl || !containerEl) return b;
+
+    const imgRect       = imgEl.getBoundingClientRect();
+    const containerRect = containerEl.getBoundingClientRect();
+
+    const offX = imgRect.left - containerRect.left;
+    const offY = imgRect.top  - containerRect.top;
+
+    const ax = a.x - offX, ay = a.y - offY;
+    const bx = b.x - offX, by = b.y - offY;
+
+    const signX = bx >= ax ? 1 : -1;
+    const signY = by >= ay ? 1 : -1;
+
+    const maxW = signX > 0 ? imgRect.width  - ax : ax;
+    const maxH = signY > 0 ? imgRect.height - ay : ay;
+
+    const dx = Math.abs(bx - ax);
+    const dy = Math.abs(by - ay);
+
+    let finalW: number, finalH: number;
+
+    const wFromDx = dx, hFromDx = dx / ratio;
+    const wFromDy = dy * ratio, hFromDy = dy;
+
+    if (wFromDx <= maxW && hFromDx <= maxH) {
+      finalW = wFromDx; finalH = hFromDx;
+    } else if (wFromDy <= maxW && hFromDy <= maxH) {
+      finalW = wFromDy; finalH = hFromDy;
+    } else {
+      finalW = Math.min(maxW, maxH * ratio);
+      finalH = finalW / ratio;
+    }
+
+    return {
+      x: offX + ax + signX * finalW,
+      y: offY + ay + signY * finalH,
+    };
+  }, [imgRef, aspectRatio]);
+
   // ── 工具：從兩個容器相對點計算正規化矩形 ─────────────────────────────────────
   const computeNormalized = useCallback((a: CanvasPt, b: CanvasPt): NormalizedRect | null => {
     const imgEl       = imgRef.current;
@@ -93,7 +167,6 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
     const containerRect = containerEl.getBoundingClientRect();
     if (imgRect.width === 0 || imgRect.height === 0) return null;
 
-    // 容器相對 → 圖片相對（px）
     const offX = imgRect.left - containerRect.left;
     const offY = imgRect.top  - containerRect.top;
 
@@ -109,17 +182,6 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
   }, [imgRef]);
 
   // ── 確認選取並回呼 ────────────────────────────────────────────────────────────
-  const finalizeSelection = useCallback((a: CanvasPt, b: CanvasPt) => {
-    const rect = computeNormalized(a, b);
-    if (rect && rect.w > 0.01 && rect.h > 0.01) {
-      setConfirmedStart(a);
-      setConfirmedEnd(b);
-      onSelect(rect);
-    } else {
-      handleClear();
-    }
-  }, [computeNormalized, onSelect]);
-
   const handleClear = useCallback(() => {
     setIsDragging(false);
     setDragStart(null);
@@ -131,6 +193,18 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
     onClear();
   }, [onClear]);
 
+  const finalizeSelection = useCallback((a: CanvasPt, b: CanvasPt) => {
+    const constrainedB = applyAspectRatio(a, b);
+    const rect = computeNormalized(a, constrainedB);
+    if (rect && rect.w > 0.01 && rect.h > 0.01) {
+      setConfirmedStart(a);
+      setConfirmedEnd(constrainedB);
+      onSelect(rect);
+    } else {
+      handleClear();
+    }
+  }, [applyAspectRatio, computeNormalized, onSelect, handleClear]);
+
   // ── 滑鼠事件 ──────────────────────────────────────────────────────────────────
   const downPtRef = useRef<CanvasPt | null>(null);
 
@@ -141,18 +215,15 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
     const pt = toCanvasPt(e.clientX, e.clientY);
     if (!pt) return;
 
-    // 若有兩點模式的第一點待定，此次 mousedown 用作第二點（在 mouseup 確認）
     if (firstClick) {
       downPtRef.current = pt;
       return;
     }
 
-    // 開始新的潛在拖曳
     downPtRef.current = pt;
     setDragStart(pt);
     setDragEnd(pt);
     setIsDragging(true);
-    // 清除舊確認框，進入新選取流程
     setConfirmedStart(null);
     setConfirmedEnd(null);
     onClear();
@@ -162,19 +233,20 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
     const pt = toCanvasPt(e.clientX, e.clientY);
     if (!pt) return;
 
-    if (isDragging) {
-      setDragEnd(pt);
+    if (isDragging && dragStart) {
+      // 套用比例限制後更新 dragEnd（即時預覽）
+      setDragEnd(applyAspectRatio(dragStart, pt));
     } else if (firstClick) {
-      setHoverPt(pt);
+      setHoverPt(applyAspectRatio(firstClick, pt));
     }
-  }, [toCanvasPt, isDragging, firstClick]);
+  }, [toCanvasPt, isDragging, dragStart, firstClick, applyAspectRatio]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
     const pt = toCanvasPt(e.clientX, e.clientY);
     if (!pt) return;
 
-    // ── 兩點模式：已有第一點，此次是第二點 ──────────────────────────────────
+    // ── 兩點模式：已有第一點 ────────────────────────────────────────────────
     if (firstClick && !isDragging) {
       setFirstClick(null);
       setHoverPt(null);
@@ -182,7 +254,7 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
       return;
     }
 
-    // ── 拖曳 or 點擊模式 ──────────────────────────────────────────────────────
+    // ── 拖曳 or 點擊模式 ────────────────────────────────────────────────────
     if (!isDragging || !dragStart) return;
     setIsDragging(false);
     setDragStart(null);
@@ -192,7 +264,6 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
     const movement = downPt ? dist(downPt, pt) : 0;
 
     if (movement > DRAG_THRESHOLD) {
-      // 拖曳模式：直接確認
       finalizeSelection(downPt!, pt);
     } else {
       // 點擊模式：設定第一點，等待第二次點擊
@@ -205,7 +276,6 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
 
   const handleMouseLeave = useCallback(() => {
     if (isDragging && dragStart && dragEnd) {
-      // 離開容器時結束拖曳
       setIsDragging(false);
       setDragStart(null);
       setDragEnd(null);
@@ -214,12 +284,11 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
     setHoverPt(null);
   }, [isDragging, dragStart, dragEnd, finalizeSelection]);
 
-  // ── 計算當前虛線框的 CSS 尺寸（拖曳中 or 兩點模式 hover）────────────────────
+  // ── 計算當前虛線框的 CSS 尺寸 ────────────────────────────────────────────────
   const getLiveDashedStyle = (): React.CSSProperties | null => {
     const a = isDragging ? dragStart : firstClick;
     const b = isDragging ? dragEnd   : hoverPt;
     if (!a || !b) return null;
-
     return {
       left:   Math.min(a.x, b.x),
       top:    Math.min(a.y, b.y),
@@ -228,7 +297,6 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
     };
   };
 
-  // 確認後的最終框
   const getConfirmedStyle = (): React.CSSProperties | null => {
     if (!confirmedStart || !confirmedEnd || !hasSelection) return null;
     return {
@@ -239,11 +307,14 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
     };
   };
 
-  const liveDashed    = getLiveDashedStyle();
-  const confirmedBox  = getConfirmedStyle();
+  const liveDashed   = getLiveDashedStyle();
+  const confirmedBox = getConfirmedStyle();
 
-  // 滑鼠游標：十字（拖曳中 or 兩點模式等待第二點）
-  const cursor = isDragging || !!firstClick ? 'crosshair' : 'crosshair';
+  // 依比例模式顯示不同顏色
+  const ratioColor =
+    aspectRatio === 'portrait'  ? '#a78bfa' :   // 紫（直式 9:16）
+    aspectRatio === 'landscape' ? '#38bdf8' :   // 藍（橫式 16:9）
+    '#00ff88';                                   // 綠（自由）
 
   return (
     <div
@@ -252,7 +323,7 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
-      style={{ position: 'absolute', inset: 0, cursor, userSelect: 'none', zIndex: 10 }}
+      style={{ position: 'absolute', inset: 0, cursor: 'crosshair', userSelect: 'none', zIndex: 10 }}
     >
       {/* 兩點模式：起點標記 */}
       {firstClick && !isDragging && (
@@ -261,8 +332,8 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
           left: firstClick.x - 5, top: firstClick.y - 5,
           width: 10, height: 10,
           borderRadius: '50%',
-          background: '#00ff88',
-          boxShadow: '0 0 6px #00ff88',
+          background: ratioColor,
+          boxShadow: `0 0 6px ${ratioColor}`,
           pointerEvents: 'none',
         }} />
       )}
@@ -273,7 +344,7 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
           position: 'absolute',
           left: liveDashed.left, top: liveDashed.top,
           width: liveDashed.width, height: liveDashed.height,
-          border: '2px dashed #00ff88',
+          border: `2px dashed ${ratioColor}`,
           boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
           pointerEvents: 'none',
           boxSizing: 'border-box',
@@ -286,23 +357,28 @@ const ViewportCanvas: React.FC<Props> = ({ imgRef, hasSelection, onSelect, onCle
           position: 'absolute',
           left: confirmedBox.left, top: confirmedBox.top,
           width: confirmedBox.width, height: confirmedBox.height,
-          border: '2px solid #00ff88',
-          background: 'rgba(0,255,136,0.07)',
+          border: `2px solid ${ratioColor}`,
+          background: `${ratioColor}12`,
           pointerEvents: 'none',
           boxSizing: 'border-box',
         }} />
       )}
 
-      {/* 兩點模式提示 */}
+      {/* 兩點模式 / 比例模式提示 */}
       {firstClick && !isDragging && (
         <div style={{
           position: 'absolute', top: 8, left: '50%',
           transform: 'translateX(-50%)',
-          background: 'rgba(0,0,0,0.7)', color: '#00ff88',
+          background: 'rgba(0,0,0,0.7)', color: ratioColor,
           padding: '4px 14px', borderRadius: '20px',
           fontSize: '0.78rem', pointerEvents: 'none', whiteSpace: 'nowrap',
         }}>
           ✦ 第一點已設定 — 點擊第二點完成選取
+          {aspectRatio !== 'none' && (
+            <span style={{ marginLeft: 8, opacity: 0.8 }}>
+              [{aspectRatio === 'portrait' ? '9:16 直式' : '16:9 橫式'}]
+            </span>
+          )}
         </div>
       )}
     </div>

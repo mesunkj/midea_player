@@ -52,7 +52,6 @@ export async function ensureModelLoaded(): Promise<void> {
     const model = faceDetection.SupportedModels.MediaPipeFaceDetector;
     detector = await faceDetection.createDetector(model, {
       runtime: 'tfjs',
-      refineLandmarks: false,
       maxFaces: 1,
     });
 
@@ -104,10 +103,8 @@ export function computeCrop(
     return { status: 'unrecognized' };
   }
 
-  // 取信心度最高的臉
-  const best = detections.reduce((a, b) =>
-    (a.score ?? 0) >= (b.score ?? 0) ? a : b
-  );
+  // maxFaces 設為 1，直接取第一筆
+  const best = detections[0];
 
   const box = best.box;
   if (!box) return { status: 'unrecognized' };
