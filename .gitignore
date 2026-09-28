@@ -15,6 +15,14 @@ dist/
 dist-ssr/
 release/
 src/tmp/
+*.apk
+*.aab
+*.dex
+
+# Android & Signing secrets
+*.keystore
+*.jks
+local.properties
 
 # Local env files
 *.local
