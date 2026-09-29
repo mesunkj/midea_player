@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveImage: (imagePath: string) => ipcRenderer.invoke('image:save', imagePath),
   snapshot: () => ipcRenderer.invoke('app:snapshot'),
   imageToBase64: (imagePath: string) => ipcRenderer.invoke('image:to-base64', imagePath),
+  loadModelAsset: (assetName: string) => ipcRenderer.invoke('ai:load-model-asset', assetName),
 
   // ── Viewport DB ──────────────────────────────────────────────────────────
   /** 讀取指定根目錄的 Viewport DB（若不存在回傳 null） */

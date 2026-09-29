@@ -65,6 +65,38 @@ app.whenReady().then(() => {
     return null;
   });
 
+  // 載入 AI 本地模型檔案（提供給渲染端 face-api.js，徹底解決打包後 file:// fetch 失敗問題）
+  ipcMain.handle('ai:load-model-asset', async (_event, assetName: string) => {
+    try {
+      const candidates = [
+        path.join(__dirname, '../renderer/models', assetName),
+        path.join(__dirname, '../../public/models', assetName),
+        path.join(app.getAppPath(), 'dist/renderer/models', assetName),
+        path.join(app.getAppPath(), 'public/models', assetName),
+        path.join(process.resourcesPath, 'models', assetName),
+      ];
+      let foundPath: string | null = null;
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          foundPath = p;
+          break;
+        }
+      }
+      if (!foundPath) {
+        throw new Error(`Model asset not found: ${assetName} (checked: ${candidates.join(', ')})`);
+      }
+
+      if (assetName.endsWith('.json')) {
+        return fs.readFileSync(foundPath, 'utf-8');
+      } else {
+        return fs.readFileSync(foundPath);
+      }
+    } catch (err) {
+      console.error(`[ai:load-model-asset] Failed to load ${assetName}:`, err);
+      throw err;
+    }
+  });
+
   // 將圖片讀取為 base64 data URL，讓渲染器的 TF.js 可以無 CORS 限制地使用
   ipcMain.handle('image:to-base64', async (_event, imagePath: string) => {
     try {

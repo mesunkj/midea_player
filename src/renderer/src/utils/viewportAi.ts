@@ -47,6 +47,38 @@ export async function ensureModelLoaded(): Promise<void> {
   try {
     console.log('[AI] Loading @vladmandic/face-api...');
     const faceapi = await import('@vladmandic/face-api');
+
+    // 解決 Electron 打包後 file:// 協議下 fetch('/models/...') 失敗（TypeError: Failed to fetch）的問題
+    const api = (window as any).electronAPI;
+    if (api?.loadModelAsset) {
+      const originalFetch = window.fetch.bind(window);
+      const customFetch: typeof window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        try {
+          const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
+          if (urlStr.includes('tiny_face_detector_model-weights_manifest.json')) {
+            const content = await api.loadModelAsset('tiny_face_detector_model-weights_manifest.json');
+            return new Response(content, {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          if (urlStr.includes('tiny_face_detector_model.bin')) {
+            const buffer = await api.loadModelAsset('tiny_face_detector_model.bin');
+            return new Response(buffer, {
+              status: 200,
+              headers: { 'Content-Type': 'application/octet-stream' }
+            });
+          }
+        } catch (err) {
+          console.warn('[AI] customFetch failed, falling back to original fetch:', err);
+        }
+        return originalFetch(input, init);
+      };
+
+      window.fetch = customFetch;
+      faceapi.env.monkeyPatch({ fetch: customFetch });
+    }
+
     const MODEL_URL = '/models';
     console.log('[AI] Loading TinyFaceDetector from', MODEL_URL);
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
