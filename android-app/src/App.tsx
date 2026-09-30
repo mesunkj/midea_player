@@ -15,28 +15,33 @@ interface PlaySettings {
   transition:    string;
   subDirKeyword: string;
   dbRootDir:     string;
+  aiMode:        boolean;
 }
 
 function App() {
   const [view, setView] = useState<AppView>('config');
-  const [settings, setSettings] = useState<PlaySettings>({
-    directories:   [],
-    layout:        'random',
-    interval:      3,
-    order:         'shuffle',
-    recursive:     false,
-    transition:    'fade',
-    subDirKeyword: '',
-    dbRootDir:     '',
+  const [settings, setSettings] = useState<PlaySettings>(() => {
+    const savedAiMode = localStorage.getItem('midea_ai_mode');
+    return {
+      directories:   [],
+      layout:        'random',
+      interval:      3,
+      order:         'shuffle',
+      recursive:     false,
+      transition:    'fade',
+      subDirKeyword: '',
+      dbRootDir:     '',
+      aiMode:        savedAiMode !== null ? savedAiMode === 'true' : true,
+    };
   });
 
   const applySettings = (
     directories: string[], layout: string, interval: number,
     order: string, recursive: boolean, transition: string,
-    subDirKeyword: string, dbRootDir: string
+    subDirKeyword: string, dbRootDir: string, aiMode: boolean = true
   ): PlaySettings => {
     const next: PlaySettings = {
-      directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir,
+      directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir, aiMode,
     };
     setSettings(next);
     return next;
@@ -47,16 +52,16 @@ function App() {
     order: string, recursive: boolean, transition: string,
     subDirKeyword: string, dbRootDir: string
   ) => {
-    applySettings(directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir);
+    applySettings(directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir, true);
     setView('scan');
   };
 
   const handlePlayDirect = (
     directories: string[], layout: string, interval: number,
     order: string, recursive: boolean, transition: string,
-    subDirKeyword: string, dbRootDir: string
+    subDirKeyword: string, dbRootDir: string, aiMode: boolean = true
   ) => {
-    applySettings(directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir);
+    applySettings(directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir, aiMode);
     setView('play');
   };
 
@@ -65,11 +70,11 @@ function App() {
     order: string, recursive: boolean, transition: string,
     subDirKeyword: string, dbRootDir: string
   ) => {
-    applySettings(directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir);
+    applySettings(directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir, true);
     setView('annotate');
   };
 
-  const { directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir } = settings;
+  const { directories, layout, interval, order, recursive, transition, subDirKeyword, dbRootDir, aiMode } = settings;
 
   return (
     <div style={{ width: '100vw', height: '100vh', margin: 0, padding: 0, overflow: 'hidden' }}>
@@ -84,6 +89,7 @@ function App() {
           initialTransition={transition}
           initialSubDirKeyword={subDirKeyword}
           initialDbRootDir={dbRootDir}
+          initialAiMode={aiMode}
           onScan={handleGoScan}
           onPlayDirect={handlePlayDirect}
           onAnnotate={handleGoAnnotate}
@@ -113,6 +119,7 @@ function App() {
           transition={transition}
           subDirKeyword={subDirKeyword}
           dbRootDir={dbRootDir}
+          aiMode={aiMode}
           onAnnotate={() => setView('annotate')}
           onExit={() => setView('config')}
         />

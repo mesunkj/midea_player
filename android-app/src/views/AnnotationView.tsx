@@ -312,9 +312,10 @@ const spinStyle = `@keyframes spin { to { transform: rotate(360deg); } }`;
 
 const S: Record<string, React.CSSProperties> = {
   root: {
-    minHeight: '100vh', backgroundColor: '#0f1117', color: '#e2e8f0',
+    height: '100%', backgroundColor: '#0f1117', color: '#e2e8f0',
     display: 'flex', flexDirection: 'column',
     fontFamily: "'Inter', 'Noto Sans TC', sans-serif",
+    overflow: 'hidden',
   },
   header: {
     display: 'flex', alignItems: 'center', padding: 'env(safe-area-inset-top, 12px) 12px 12px',

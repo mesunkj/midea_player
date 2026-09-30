@@ -37,7 +37,10 @@ const modelErrorCallbacks: Array<(e: any) => void> = [];
  */
 export async function ensureModelLoaded(): Promise<void> {
   if (modelReady) return;
-  if (modelError) throw new Error('Model previously failed to load');
+  if (modelError) {
+    // 允許重試：重置錯誤狀態
+    modelError = false;
+  }
 
   if (modelLoading) {
     return new Promise((resolve, reject) => {
@@ -49,6 +52,10 @@ export async function ensureModelLoaded(): Promise<void> {
   modelLoading = true;
   try {
     console.log('[AI] Loading BlazeFace model...');
+
+    // 釋放控制權給 UI thread，避免 Android WebView 判定無回應（ANR）
+    await new Promise<void>(r => setTimeout(r, 50));
+
     const model = faceDetection.SupportedModels.MediaPipeFaceDetector;
     detector = await faceDetection.createDetector(model, {
       runtime: 'tfjs',
@@ -94,10 +101,15 @@ export function computeCrop(
   imgW: number,
   imgH: number
 ): AiCropResult {
+  // ── 調整參數說明 ──────────────────────────────────────────────────────────
+  // HEAD_TOP_MARGIN:    臉頂距圖頂 < 5% 時不縮放（幾乎貼頂）
+  // SIDE_MARGIN:        臉左右距邊 < 5% 時不縮放
+  // HEAD_PADDING_RATIO: 臉框上方額外留白比例（0.5 = 臉高的一半）
+  // BODY_WIDTH_RATIO:   預估身體寬度 = 臉寬 × N，越小裁切越緊
   const HEAD_TOP_MARGIN    = 0.05;
   const SIDE_MARGIN        = 0.05;
-  const HEAD_PADDING_RATIO = 0.25;
-  const BODY_WIDTH_RATIO   = 2.6;
+  const HEAD_PADDING_RATIO = 0.5;   // 從 0.25 增加到 0.5，讓頭頂有足夠留白
+  const BODY_WIDTH_RATIO   = 2.2;   // 從 2.6 縮小到 2.2，避免畫面過寬臉被推偏
 
   if (!detections || detections.length === 0) {
     return { status: 'unrecognized' };
@@ -127,15 +139,25 @@ export function computeCrop(
 
   if (!shouldZoom) return { status: 'unchanged' };
 
+  // ── 計算裁切區域 ─────────────────────────────────────────────────────────
   const estimatedBodyW = faceW * BODY_WIDTH_RATIO;
   const cropPxLeft  = Math.max(0, faceCenterX - estimatedBodyW / 2);
   const cropPxRight = Math.min(imgW, faceCenterX + estimatedBodyW / 2);
   const cropPxW     = cropPxRight - cropPxLeft;
-  let   cropPxTop   = Math.max(0, faceTop - faceH * HEAD_PADDING_RATIO);
-  const cropPxH     = cropPxW * (imgH / imgW);
 
-  if (cropPxTop + cropPxH > imgH) cropPxTop = Math.max(0, imgH - cropPxH);
+  // 頭頂留白：臉框頂部再往上 HEAD_PADDING_RATIO 倍臉高
+  let cropPxTop = Math.max(0, faceTop - faceH * HEAD_PADDING_RATIO);
 
+  // 裁切高度保持圖片原始長寬比（避免高度壓縮或拉伸）
+  const aspectRatio = imgH / imgW;
+  const cropPxH     = cropPxW * aspectRatio;
+
+  // 若裁切區超出底部，向上移動使其完全在圖片內
+  if (cropPxTop + cropPxH > imgH) {
+    cropPxTop = Math.max(0, imgH - cropPxH);
+  }
+
+  // ── 轉換為 0~1 比例值 ────────────────────────────────────────────────────
   const cropX = cropPxLeft / imgW;
   const cropY = cropPxTop  / imgH;
   const cropW = cropPxW    / imgW;

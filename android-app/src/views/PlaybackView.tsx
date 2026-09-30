@@ -24,13 +24,14 @@ interface Props {
   transition:    string;
   subDirKeyword: string;
   dbRootDir:     string;
+  aiMode?:       boolean;
   onExit:        () => void;
   onAnnotate:    () => void;
 }
 
 const PlaybackView: React.FC<Props> = ({
   directories, layout, intervalTime, order, recursive, transition,
-  subDirKeyword, dbRootDir, onExit, onAnnotate,
+  subDirKeyword, dbRootDir, aiMode = true, onExit, onAnnotate,
 }) => {
   // 在 Android 版中，directories 本身就是圖片 URI 列表
   const [images,  setImages]  = useState<string[]>([]);
@@ -79,7 +80,9 @@ const PlaybackView: React.FC<Props> = ({
     return () => { isMounted = false; };
   }, [directories, order]);
 
-  if (loading || !dbLoaded) {
+  const isDbReady = !aiMode || dbLoaded;
+
+  if (loading || !isDbReady) {
     return (
       <div style={{
         backgroundColor: '#0f1117', color: '#94a3b8',
@@ -154,7 +157,7 @@ const PlaybackView: React.FC<Props> = ({
   // 照片牆模式
   if (layout === '10x10') {
     return (
-      <div style={{ position: 'relative', cursor: isIdle ? 'none' : 'default' }}>
+      <div style={{ position: 'relative', cursor: isIdle ? 'none' : 'default', overflow: 'hidden', width: '100vw', height: '100vh' }}>
         <PhotoWall images={images} isIdle={isIdle} />
         {renderGlobalControls()}
       </div>
@@ -223,6 +226,7 @@ const PlaybackView: React.FC<Props> = ({
       backgroundColor: '#0f1117', height: '100vh',
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       cursor: isIdle ? 'none' : 'default',
+      overflow: 'hidden',
     }}>
       <div style={{
         display: 'grid',
@@ -242,7 +246,8 @@ const PlaybackView: React.FC<Props> = ({
               intervalTime={intervalTime}
               step={pageSize}
               transition={transition}
-              getViewport={getViewport}
+              getViewport={aiMode ? getViewport : undefined}
+              aiMode={aiMode}
             />
           </div>
         ))}

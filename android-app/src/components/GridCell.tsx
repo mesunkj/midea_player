@@ -22,38 +22,64 @@ interface Props {
   step:         number;
   transition:   string;
   getViewport?: (imagePath: string) => AiCropResult | undefined;
+  aiMode?:      boolean;
 }
 
 const TRANSITIONS = ['fade', 'slide', 'zoom', 'blur', 'wipe'];
 
-// ── AI 裁切樣式（CSS transform 實作） ─────────────────────────────────────────
+// ── AI 裁切樣式（絕對定位實作） ─────────────────────────────────────────────────
+//
+// 實作原理：容器 overflow:hidden，img 以絕對定位「放大後移位」
+// 等同於 CSS background-image 的 background-size + background-position 效果
+// 避免 objectFit:cover + transform:scale 相互干擾導致臉部被裁到畫面外
 
-function getImageStyle(aiCrop: AiCropResult | null): React.CSSProperties {
-  if (!aiCrop || aiCrop.status !== 'zoomed' || aiCrop.cropW === undefined) {
-    return { width: '100%', height: '100%', objectFit: 'cover' };
+/**
+ * 計算讓裁切區（cropX/Y/W/H 均為 0~1 比例值）填滿容器的 img 絕對定位樣式。
+ * 縮放因子 = 1/cropW（讓裁切寬度撐滿容器寬度），
+ * 然後偏移使裁切左上角對齊容器左上角。
+ */
+function getImageStyle(aiCrop: AiCropResult | null, aiMode: boolean = true): React.CSSProperties {
+  if (!aiMode || !aiCrop || aiCrop.status !== 'zoomed' || aiCrop.cropW === undefined) {
+    // 未裁切或正常播放：正常 cover 填滿
+    return {
+      position: 'absolute',
+      top: 0, left: 0,
+      width: '100%', height: '100%',
+      objectFit: 'cover',
+    };
   }
 
   const { cropX = 0, cropY = 0, cropW, cropH = cropW } = aiCrop;
-  // 縮放比例（讓裁切區填滿容器）
-  const scale    = 1 / cropW;
-  // 裁切中心的偏移（translate 移至中心對齊）
-  const originX  = (cropX + cropW / 2) * 100;
-  const originY  = (cropY + cropH / 2) * 100;
+
+  // 縮放倍率：讓裁切寬度（cropW 比例）撐滿 100% 容器寬度
+  const scaleW = 1 / cropW;
+  // 高度方向同比例縮放（保持長寬比），但用裁切高度比對容器高度取最大值避免黑邊
+  const scaleH = 1 / cropH;
+  const scale  = Math.max(scaleW, scaleH);
+
+  // img 實際顯示尺寸（百分比，相對容器）
+  const imgW = scale * 100;
+  const imgH = scale * 100;
+
+  // 裁切左上角在縮放後的絕對位置（%），對齊容器左上角需要取負偏移
+  const left = -(cropX * scale * 100);
+  const top  = -(cropY * scale * 100);
 
   return {
-    width: '100%',
-    height: '100%',
+    position: 'absolute',
+    left:   `${left.toFixed(2)}%`,
+    top:    `${top.toFixed(2)}%`,
+    width:  `${imgW.toFixed(2)}%`,
+    height: `${imgH.toFixed(2)}%`,
     objectFit: 'cover',
-    transformOrigin: `${originX}% ${originY}%`,
-    transform: `scale(${scale.toFixed(3)})`,
-    transition: 'transform 1.2s cubic-bezier(0.25, 0.8, 0.25, 1)',
+    transition: 'none',
   };
 }
 
 // ── GridCell 組件 ─────────────────────────────────────────────────────────────
 
 const GridCell: React.FC<Props> = ({
-  images, directories, initialIndex, intervalTime, step, transition, getViewport
+  images, directories, initialIndex, intervalTime, step, transition, getViewport, aiMode = true
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isPlaying,    setIsPlaying]    = useState(true);
@@ -71,11 +97,11 @@ const GridCell: React.FC<Props> = ({
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controlsTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // AI 裁切
-  const dbCropA = getViewport ? getViewport(imgA) : undefined;
-  const dbCropB = getViewport ? getViewport(imgB) : undefined;
-  const liveAiCropA = useAiCrop(dbCropA ? '' : imgA);
-  const liveAiCropB = useAiCrop(dbCropB ? '' : imgB);
+  // AI 裁切（僅在 aiMode 為 true 時啟用）
+  const dbCropA = (aiMode && getViewport) ? getViewport(imgA) : undefined;
+  const dbCropB = (aiMode && getViewport) ? getViewport(imgB) : undefined;
+  const liveAiCropA = useAiCrop((aiMode && !dbCropA) ? imgA : '');
+  const liveAiCropB = useAiCrop((aiMode && !dbCropB) ? imgB : '');
   const aiCropA: AiCropResult = dbCropA ?? liveAiCropA;
   const aiCropB: AiCropResult = dbCropB ?? liveAiCropB;
   const activeCrop = layer === 0 ? aiCropA : aiCropB;
@@ -175,7 +201,7 @@ const GridCell: React.FC<Props> = ({
 
   // ── AI 指示燈 ────────────────────────────────────────────────────────────────
   const renderAiIndicator = () => {
-    if (activeCrop.status === 'pending') return null;
+    if (!aiMode || activeCrop.status === 'pending') return null;
     let color = '';
     if (activeCrop.status === 'zoomed') color = '#00ff00';
     else if (activeCrop.status === 'unchanged') color = '#ffcc00';
@@ -211,7 +237,7 @@ const GridCell: React.FC<Props> = ({
           <img
             src={imgA}
             alt=""
-            style={getImageStyle(aiCropA.status !== 'pending' ? aiCropA : null)}
+            style={getImageStyle(aiCropA.status !== 'pending' ? aiCropA : null, aiMode)}
           />
         )}
       </div>
@@ -221,7 +247,7 @@ const GridCell: React.FC<Props> = ({
           <img
             src={imgB}
             alt=""
-            style={getImageStyle(aiCropB.status !== 'pending' ? aiCropB : null)}
+            style={getImageStyle(aiCropB.status !== 'pending' ? aiCropB : null, aiMode)}
           />
         )}
       </div>

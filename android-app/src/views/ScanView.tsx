@@ -222,7 +222,7 @@ const StatBadge: React.FC<{ color: string; icon: string; value: number; label: s
 // ─── 樣式 ─────────────────────────────────────────────────────────────────────
 
 const styles: Record<string, React.CSSProperties> = {
-  root:          { minHeight: '100vh', backgroundColor: '#0f1117', color: '#e2e8f0', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', 'Noto Sans TC', sans-serif" },
+  root:          { height: '100%', backgroundColor: '#0f1117', color: '#e2e8f0', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', 'Noto Sans TC', sans-serif", overflow: 'hidden' },
   header:        { display: 'flex', alignItems: 'center', padding: 'env(safe-area-inset-top, 16px) 16px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: '8px' },
   title:         { margin: 0, fontSize: '1.2rem', fontWeight: 700, background: 'linear-gradient(135deg, #93c5fd, #c4b5fd)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' },
   subtitle:      { margin: '4px 0 0', color: '#64748b', fontSize: '0.78rem', lineHeight: 1.4 },

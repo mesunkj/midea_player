@@ -16,7 +16,25 @@
         -webkit-touch-callout: none;
         box-sizing: border-box;
       }
-      html, body, #root {
+      html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        /* html 層不鎖 overflow，讓子元件可捲動 */
+        overflow: hidden;
+        background: #0f1117;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        /* body 不鎖死 overflow，讓各 view 的捲動容器正常運作 */
+        overflow: hidden;
+        background: #0f1117;
+      }
+      #root {
         margin: 0;
         padding: 0;
         width: 100%;

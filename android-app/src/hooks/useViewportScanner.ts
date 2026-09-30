@@ -209,6 +209,9 @@ export function useViewportScanner() {
         if (!filenameCache.has(fname)) {
           filenameCache.set(fname, entry);
         }
+
+        // yield 給 UI thread，避免 Android WebView 無回應
+        await new Promise<void>(r => setTimeout(r, 0));
       }
     }
 
