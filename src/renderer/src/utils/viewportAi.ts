@@ -76,7 +76,18 @@ export async function ensureModelLoaded(): Promise<void> {
       };
 
       window.fetch = customFetch;
-      faceapi.env.monkeyPatch({ fetch: customFetch });
+      // ⚠ monkeyPatch 若未提供 createCanvasElement / createImageElement，
+      // 會被重設為 `() => new HTMLCanvasElement()`，在瀏覽器中拋出
+      // "TypeError: Illegal constructor"，導致 detectAllFaces 永遠不會 resolve（掃描卡住）。
+      faceapi.env.monkeyPatch({
+        fetch:               customFetch,
+        Canvas:              HTMLCanvasElement,
+        Image:               HTMLImageElement,
+        ImageData:           ImageData,
+        Video:               HTMLVideoElement,
+        createCanvasElement: () => document.createElement('canvas'),
+        createImageElement:  () => document.createElement('img'),
+      } as any);
     }
 
     const MODEL_URL = '/models';
@@ -213,6 +224,16 @@ export function computeCrop(
 
 // ─── 人臉偵測 ─────────────────────────────────────────────────────────────────
 
+/** 單張偵測逾時（毫秒），首次執行需編譯 WebGL shader，故保留寬裕時間 */
+const DETECT_TIMEOUT_MS = 20000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`[AI] ${label} timeout after ${ms}ms`)), ms);
+    p.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
+}
+
 /**
  * 對單張圖片執行人臉偵測並計算 Viewport 裁切結果。
  * rawPath 為原始絕對路徑（自動轉換為 local-resource URL）。
@@ -229,11 +250,16 @@ export async function detectViewport(rawPath: string): Promise<AiCropResult> {
     return { status: 'unrecognized' };
   }
 
-  // 2. 人臉偵測
+  // 2. 人臉偵測（加入逾時保護：face-api 內部錯誤可能不會傳遞到 Promise，避免永久卡住）
   try {
     const faceapi = await import('@vladmandic/face-api');
-    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
-    const detections = await faceapi.detectAllFaces(img, options);
+    // inputSize 需為 32 的倍數；320 會讓「人物很小」的圖（正是需要 Zoom-in 的情境）臉部過小而漏偵測
+    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 608, scoreThreshold: 0.4 });
+    const detections = await withTimeout(
+      faceapi.detectAllFaces(img, options) as unknown as Promise<any[]>,
+      DETECT_TIMEOUT_MS,
+      'detectAllFaces'
+    );
     return computeCrop(detections, img.naturalWidth, img.naturalHeight);
   } catch (err) {
     console.error('[AI] Detection failed:', rawPath, err);
